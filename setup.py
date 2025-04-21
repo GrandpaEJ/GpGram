@@ -7,7 +7,7 @@ setup(
     name="gpgram",
     version="0.1.0",
     author="Gpgram Team",
-    author_email="",
+    author_email="your.email@example.com",
     description="A modern, asynchronous Telegram Bot API library with advanced handler capabilities",
     long_description=long_description,
     long_description_content_type="text/markdown",

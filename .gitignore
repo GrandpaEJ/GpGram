@@ -8,6 +8,10 @@ __pycache__/
 
 # secrets
 .env
+*.token
+*.key
+*.pem
+*.cert
 
 # Distribution / packaging
 .Python
@@ -121,3 +125,10 @@ dmypy.json
 .vscode/
 *.swp
 *.swo
+
+# Examples directory (for development only)
+examples/
+
+# Local test files
+test_*.py
+local_*.py
