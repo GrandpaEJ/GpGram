@@ -17,6 +17,11 @@ from .filters import (
     ContentTypeFilter, ChatTypeFilter
 )
 from .utils import InlineKeyboardBuilder, ReplyKeyboardBuilder, escape_markdown, escape_html
+from .utils.media import download_file, upload_media_group, create_media_group, download_profile_photos
+from .utils.conversation import ConversationManager, ConversationHandler, get_conversation_manager
+from .middleware.rate_limit import RateLimitMiddleware
+from .webhook import WebhookServer, setup_webhook, remove_webhook, get_webhook_info, run_webhook
+from .handlers.inline_query_handler import InlineQueryHandler, answer_inline_query, create_inline_query_result_article, create_input_text_message_content
 
 # Common simplified interfaces
 from .common import Button, InlineButton, KeyboardButton
@@ -38,6 +43,21 @@ __all__ = [
     # Utils
     "InlineKeyboardBuilder", "ReplyKeyboardBuilder",
     "escape_markdown", "escape_html",
+
+    # Media utilities
+    "download_file", "upload_media_group", "create_media_group", "download_profile_photos",
+
+    # Conversation management
+    "ConversationManager", "ConversationHandler", "get_conversation_manager",
+
+    # Middleware
+    "RateLimitMiddleware",
+
+    # Webhook support
+    "WebhookServer", "setup_webhook", "remove_webhook", "get_webhook_info", "run_webhook",
+
+    # Inline query handling
+    "InlineQueryHandler", "answer_inline_query", "create_inline_query_result_article", "create_input_text_message_content",
 
     # Common simplified interfaces
     "Button", "InlineButton", "KeyboardButton",
