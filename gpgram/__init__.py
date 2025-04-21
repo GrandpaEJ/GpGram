@@ -7,6 +7,7 @@ with advanced routing and handler capabilities.
 
 __version__ = "0.1.0"
 
+# Core classes
 from .bot import Bot
 from .dispatcher import Dispatcher
 from .router import Router
@@ -16,6 +17,12 @@ from .filters import (
     ContentTypeFilter, ChatTypeFilter
 )
 from .utils import InlineKeyboardBuilder, ReplyKeyboardBuilder, escape_markdown, escape_html
+
+# Common simplified interfaces
+from .common import Button, InlineButton, KeyboardButton
+from .common import Message as SimpleMessage
+from .common import Bot as SimpleBot
+from .common import Handler
 
 __all__ = [
     # Core components
@@ -31,4 +38,8 @@ __all__ = [
     # Utils
     "InlineKeyboardBuilder", "ReplyKeyboardBuilder",
     "escape_markdown", "escape_html",
+
+    # Common simplified interfaces
+    "Button", "InlineButton", "KeyboardButton",
+    "SimpleMessage", "SimpleBot", "Handler",
 ]

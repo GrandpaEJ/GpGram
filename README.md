@@ -13,6 +13,7 @@ A modern, asynchronous Telegram Bot API library with advanced handler capabiliti
 - 📝 **Type hints** for better IDE support
 - 🧪 **Pydantic integration** for data validation
 - 🔒 **Error handling** with custom exceptions
+- 🌟 **Simplified syntax** for common tasks
 
 ## Installation
 
@@ -170,6 +171,52 @@ async def error_handler(exception, update):
 dp.register_error_handler(error_handler)
 ```
 
+## Simplified Syntax
+
+Gpgram also provides a simplified syntax for common tasks:
+
+```python
+import os
+import asyncio
+from gpgram import SimpleBot, Handler, Button, InlineButton
+
+async def main():
+    # Create a bot instance with the simplified interface
+    bot = SimpleBot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+
+    # Create a handler
+    handler = Handler(bot=bot)
+
+    # Register command handlers
+    @handler.command("start")
+    async def start_command(message, bot):
+        await message.reply(
+            bot=bot,
+            text="Hello! I'm a bot created with Gpgram's simplified syntax."
+        )
+
+    # Register message handlers
+    @handler.message(contains="hello")
+    async def hello_handler(message, bot):
+        await message.reply(
+            bot=bot,
+            text=f"Hello, {message.from_user_first_name}!"
+        )
+
+    # Create inline buttons
+    button1 = InlineButton(text="Option 1", callback_data="option1")
+    button2 = InlineButton(text="Option 2", callback_data="option2")
+
+    # Create a keyboard with the buttons
+    keyboard = Button.row(button1, button2)
+
+    # Start polling
+    await handler.start_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ## Examples
 
 Check out the examples directory for more detailed examples:
@@ -178,6 +225,7 @@ Check out the examples directory for more detailed examples:
 - `advanced_bot.py` - An advanced bot with inline keyboards, middleware, and error handling
 - `echo_bot.py` - A basic echo bot
 - `inline_keyboard_bot.py` - A bot demonstrating inline keyboards
+- `simple_syntax_bot.py` - A bot using the simplified syntax
 
 ## Documentation
 
