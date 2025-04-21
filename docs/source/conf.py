@@ -59,11 +59,9 @@ html_css_files = [
     'css/custom.css',
 ]
 
-# HTML logo
-html_logo = '_static/gpgram-logo.png'
-
-# HTML favicon
-html_favicon = '_static/favicon.ico'
+# HTML logo and favicon are commented out until we have the actual files
+# html_logo = '_static/img/gpgram-logo.png'
+# html_favicon = '_static/img/favicon.ico'
 
 # Intersphinx mapping
 intersphinx_mapping = {
