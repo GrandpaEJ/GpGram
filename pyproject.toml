@@ -1,7 +1,7 @@
 [project]
 name = "gpgram"
 version = "1.0.0"
-description = "A clean and simple Telegram Bot API library"
+description = "GPgram a clean and simple Telegram Bot API library"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

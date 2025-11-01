@@ -7,6 +7,7 @@ Shows how to use bold, italic, code blocks, links, and more.
 """
 
 import os
+
 from gpgram import Bot
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

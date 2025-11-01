@@ -7,6 +7,7 @@ Shows how to handle commands with and without parameters.
 """
 
 import os
+
 from gpgram import Bot
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

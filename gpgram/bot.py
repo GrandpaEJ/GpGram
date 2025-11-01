@@ -433,6 +433,55 @@ class Event:
         return None
 
     @property
+    def photo(self) -> list[dict[str, Any]] | None:
+        """Get the photo from the event."""
+        if self.message:
+            return self.message.photo
+        return None
+
+    @property
+    def document(self) -> dict[str, Any] | None:
+        """Get the document from the event."""
+        if self.message:
+            return self.message.document
+        return None
+
+    @property
+    def audio(self) -> dict[str, Any] | None:
+        """Get the audio from the event."""
+        if self.message:
+            return self.message.audio
+        return None
+
+    @property
+    def video(self) -> dict[str, Any] | None:
+        """Get the video from the event."""
+        if self.message:
+            return self.message.video
+        return None
+
+    @property
+    def animation(self) -> dict[str, Any] | None:
+        """Get the animation from the event."""
+        if self.message:
+            return self.message.animation
+        return None
+
+    @property
+    def sticker(self) -> dict[str, Any] | None:
+        """Get the sticker from the event."""
+        if self.message:
+            return self.message.sticker
+        return None
+
+    @property
+    def voice(self) -> dict[str, Any] | None:
+        """Get the voice from the event."""
+        if self.message:
+            return self.message.voice
+        return None
+
+    @property
     def callback_data(self) -> str | None:
         """Get the callback data from the event."""
         if self.callback_query:
@@ -457,12 +506,12 @@ class Event:
             return self.callback_query.from_user.id
         return None
 
-    async def send_message(self, text: str, **kwargs) -> Message:
+    async def send_message(self, text: str | None = None, **kwargs) -> Message:
         """
         Send a message in response to this event.
 
         Args:
-            text: Message text
+            text: Message text (optional when sending media)
             **kwargs: Additional parameters
 
         Returns:
@@ -471,7 +520,44 @@ class Event:
         if not self.chat_id:
             raise ValueError("No chat ID available for this event")
 
-        return await self.bot.send_message(self.chat_id, text, **kwargs)
+        # Handle the case where text is passed as a kwarg (e.g., from reply method)
+        if text is None and 'text' in kwargs:
+            text = kwargs.pop('text')
+
+        # Handle media-specific parameters
+        media_keys = ['photo', 'document', 'audio', 'video', 'animation', 'sticker', 'voice']
+        media_type = next((key for key in media_keys if key in kwargs), None)
+
+        if media_type:
+            # For media messages, use the core bot's send methods
+            method_name = f'send_{media_type}'
+            if hasattr(self.bot, method_name):
+                method = getattr(self.bot, method_name)
+                # Extract media-specific params
+                allowed_keys = ['caption', 'parse_mode', 'reply_markup', 'disable_notification',
+                              'protect_content', 'reply_to_message_id', 'allow_sending_without_reply',
+                              'thumb', 'title', 'performer', 'duration', 'width', 'height',
+                              'disable_content_type_detection']
+                media_kwargs = {k: v for k, v in kwargs.items() if k in allowed_keys or k == media_type}
+                media_kwargs['chat_id'] = self.chat_id
+                result = await method(**media_kwargs)
+                # Ensure we return a Message object
+                if isinstance(result, dict):
+                    return Message.from_dict(result)
+                elif hasattr(result, '__dict__'):
+                    return result
+                else:
+                    # If result is not a dict or Message, something went wrong
+                    raise ValueError(f"Unexpected result type from {method_name}: {type(result)}")
+            else:
+                # Fallback to send_message if method doesn't exist
+                if text is None:
+                    raise ValueError("Event.send_message() requires 'text' parameter when not sending media")
+                return await self.bot.send_message(self.chat_id, text, **kwargs)
+        else:
+            if text is None:
+                raise ValueError("Event.send_message() requires 'text' parameter when not sending media")
+            return await self.bot.send_message(self.chat_id, text, **kwargs)
 
     async def reply(self, text: str, **kwargs) -> Message:
         """
@@ -491,9 +577,7 @@ class Event:
         if self.message:
             message_id = self.message.message_id
 
-        return await self.bot.send_message(
-            self.chat_id, text, reply_to_message_id=message_id, **kwargs
-        )
+        return await self.send_message(text, reply_to_message_id=message_id, **kwargs)
 
     async def edit_message(self, text: str, **kwargs) -> Message | bool:
         """

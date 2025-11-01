@@ -7,6 +7,7 @@ Shows how to create interactive button interfaces for users.
 """
 
 import os
+
 from gpgram import Bot
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -42,7 +43,7 @@ I demonstrate different types of keyboards in Telegram!
 
 Try the commands above! 🎹
 """
-    await event.send_message(welcome_text, parse_mode="Markdown")
+    await event.send_message(welcome_text, parse_mode="MarkdownV2")
 
 @bot.command(r"reply_keyboard")
 async def show_reply_keyboard(event):
@@ -64,7 +65,7 @@ async def show_reply_keyboard(event):
         "This keyboard stays visible until you remove it.\n"
         "Try pressing different buttons!",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.command(r"inline_keyboard")
@@ -92,7 +93,7 @@ async def show_inline_keyboard(event):
         "These buttons appear below the message.\n"
         "Click them to see callback responses!",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.command(r"remove_keyboard")
@@ -156,7 +157,7 @@ keyboard = {
 /inline_keyboard - Show inline keyboard
 /remove_keyboard - Remove reply keyboard
 """
-    await event.send_message(help_text, parse_mode="Markdown")
+    await event.send_message(help_text, parse_mode="MarkdownV2")
 
 # Handle reply keyboard button presses
 @bot.on_message(r"📅 (.+)")
@@ -203,7 +204,7 @@ async def handle_like(event):
     await event.answer_callback("👍 You liked this!")
     await event.edit_message(
         "👍 *Liked!*\n\nThank you for the positive feedback!",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.on_callback(r"action_dislike")
@@ -212,7 +213,7 @@ async def handle_dislike(event):
     await event.answer_callback("👎 Feedback noted")
     await event.edit_message(
         "👎 *Disliked*\n\nWe'll work on improving!",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.on_callback(r"action_favorite")
@@ -221,7 +222,7 @@ async def handle_favorite(event):
     await event.answer_callback("⭐ Added to favorites!")
     await event.edit_message(
         "⭐ *Favorited!*\n\nSaved to your favorites list.",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.on_callback(r"action_share")
@@ -230,7 +231,7 @@ async def handle_share(event):
     await event.answer_callback("🔗 Share link copied!")
     await event.edit_message(
         "🔗 *Share*\n\nShare link: `https://t.me/share/url?url=...`",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.on_callback(r"action_stats")
@@ -243,7 +244,7 @@ async def handle_stats(event):
         "• 👎 Dislikes: 3\n"
         "• ⭐ Favorites: 15\n"
         "• 🔗 Shares: 8",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 @bot.on_callback(r"action_settings")
@@ -269,7 +270,7 @@ async def handle_settings(event):
     await event.edit_message(
         "⚙️ *Settings*\n\nChoose a setting to configure:",
         reply_markup=settings_keyboard,
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
     await event.answer_callback("⚙️ Opening settings...")
 
@@ -286,7 +287,7 @@ async def handle_settings_options(event):
     }
 
     response = responses.get(setting, "Unknown setting")
-    await event.edit_message(response, parse_mode="Markdown")
+    await event.edit_message(response, parse_mode="MarkdownV2")
     await event.answer_callback(f"Opening {setting} settings...")
 
 @bot.on_callback(r"back_to_main")
@@ -312,7 +313,7 @@ async def back_to_main(event):
     await event.edit_message(
         "🎮 *Back to Main Menu*\n\nChoose an action:",
         reply_markup=keyboard,
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
     await event.answer_callback("⬅️ Back to main menu")
 

@@ -6,8 +6,9 @@ Demonstrates how to use webhooks instead of polling for updates.
 Webhooks are more efficient for production bots as they don't require constant polling.
 """
 
-import os
 import asyncio
+import os
+
 from gpgram import Bot
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

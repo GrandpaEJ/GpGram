@@ -7,6 +7,7 @@ This demonstrates basic message handling in Gpgram.
 """
 
 import os
+
 from gpgram import Bot
 
 # Get bot token from environment variable

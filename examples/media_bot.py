@@ -11,6 +11,7 @@ Demonstrates how to handle various media types in Gpgram:
 """
 
 import os
+
 from gpgram import Bot
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -80,7 +81,6 @@ async def send_document(event):
     """Send a sample document."""
     # Create a simple text file to send as document
     import tempfile
-    import io
 
     # Create sample content
     content = """Hello from Gpgram Media Bot! 📄
@@ -146,7 +146,7 @@ async def send_audio(event):
 async def send_video(event):
     """Send a video file."""
     # Using a sample video URL (placeholder)
-    video_url = "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+    # video_url = "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
 
     await event.send_message(
         "🎥 *Video Support*\n\n"
@@ -259,10 +259,11 @@ async def handle_incoming_media(event):
 
     # Only respond to media messages, ignore text
     elif event.text and not event.text.startswith('/'):
-        return  # Don't respond to regular text messages
+        pass  # Don't respond to regular text messages
 
 if __name__ == "__main__":
     print("🚀 Starting Media Bot...")
     print("Try commands like: /photo, /document, /media_keyboard")
     print("Or send me photos, documents, or other media!")
+
     bot.run()
