@@ -2,10 +2,12 @@
 Base class for Telegram API types.
 """
 
-from typing import Any, Dict, List, Optional, TypeVar, Type, ClassVar, get_type_hints
+from typing import Any, TypeVar
+
 from pydantic import BaseModel
 
-T = TypeVar('T', bound='TelegramObject')
+T = TypeVar("T", bound="TelegramObject")
+
 
 class TelegramObject(BaseModel):
     """
@@ -15,13 +17,10 @@ class TelegramObject(BaseModel):
     JSON-serializable dictionaries.
     """
 
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "extra": "allow"
-    }
+    model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
 
     @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
+    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """
         Create an instance of the class from a dictionary.
 
@@ -36,7 +35,7 @@ class TelegramObject(BaseModel):
 
         return cls.model_validate(data)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert the object to a dictionary.
 

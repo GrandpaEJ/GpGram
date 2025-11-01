@@ -1,65 +1,27 @@
 """
-Gpgram - A modern, asynchronous Telegram Bot API library with advanced handler capabilities.
+Gpgram - A clean and simple Telegram Bot API library.
 
-This library provides a clean, async-first interface to the Telegram Bot API
-with advanced routing and handler capabilities.
+This library provides a straightforward, event-driven interface for building
+Telegram bots with minimal complexity and maximum ease of use.
+
+Example:
+    from gpgram import Bot
+
+    bot = Bot("YOUR_BOT_TOKEN")
+
+    @bot.command(r"hello|hi")
+    async def greet(event):
+        await event.send_message("Hello there!")
+
+    @bot.on_message(r"ping")
+    async def ping(event):
+        await event.reply("Pong!")
+
+    bot.run()
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
-# Core classes
-from .bot import Bot
-from .dispatcher import Dispatcher
-from .router import Router
-from .types import Update, Message, User, Chat, CallbackQuery
-from .filters import (
-    CommandFilter, TextFilter, RegexFilter,
-    ContentTypeFilter, ChatTypeFilter
-)
-from .utils import InlineKeyboardBuilder, ReplyKeyboardBuilder, escape_markdown, escape_html
-from .utils.media import download_file, upload_media_group, create_media_group, download_profile_photos
-from .utils.conversation import ConversationManager, ConversationHandler, get_conversation_manager
-from .middleware.rate_limit import RateLimitMiddleware
-from .webhook import WebhookServer, setup_webhook, remove_webhook, get_webhook_info, run_webhook
-from .handlers.inline_query_handler import InlineQueryHandler, answer_inline_query, create_inline_query_result_article, create_input_text_message_content
+from .bot import Bot, Event
 
-# Common simplified interfaces
-from .common import Button, InlineButton, KeyboardButton
-from .common import Message as SimpleMessage
-from .common import Bot as SimpleBot
-from .common import Handler
-
-__all__ = [
-    # Core components
-    "Bot", "Dispatcher", "Router",
-
-    # Types
-    "Update", "Message", "User", "Chat", "CallbackQuery",
-
-    # Filters
-    "CommandFilter", "TextFilter", "RegexFilter",
-    "ContentTypeFilter", "ChatTypeFilter",
-
-    # Utils
-    "InlineKeyboardBuilder", "ReplyKeyboardBuilder",
-    "escape_markdown", "escape_html",
-
-    # Media utilities
-    "download_file", "upload_media_group", "create_media_group", "download_profile_photos",
-
-    # Conversation management
-    "ConversationManager", "ConversationHandler", "get_conversation_manager",
-
-    # Middleware
-    "RateLimitMiddleware",
-
-    # Webhook support
-    "WebhookServer", "setup_webhook", "remove_webhook", "get_webhook_info", "run_webhook",
-
-    # Inline query handling
-    "InlineQueryHandler", "answer_inline_query", "create_inline_query_result_article", "create_input_text_message_content",
-
-    # Common simplified interfaces
-    "Button", "InlineButton", "KeyboardButton",
-    "SimpleMessage", "SimpleBot", "Handler",
-]
+__all__ = ["Bot", "Event"]

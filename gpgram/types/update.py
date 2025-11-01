@@ -2,16 +2,16 @@
 Update type for Telegram API.
 """
 
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
-from pydantic import Field
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .chat import Chat
     from .user import User
 
 from .base import TelegramObject
-from .message import Message
 from .callback_query import CallbackQuery
+from .message import Message
+
 
 class Update(TelegramObject):
     """
@@ -36,23 +36,23 @@ class Update(TelegramObject):
     """
 
     update_id: int
-    message: Optional[Message] = None
-    edited_message: Optional[Message] = None
-    channel_post: Optional[Message] = None
-    edited_channel_post: Optional[Message] = None
-    callback_query: Optional[CallbackQuery] = None
-    inline_query: Optional[Any] = None
-    chosen_inline_result: Optional[Any] = None
-    shipping_query: Optional[Any] = None
-    pre_checkout_query: Optional[Any] = None
-    poll: Optional[Any] = None
-    poll_answer: Optional[Any] = None
-    my_chat_member: Optional[Any] = None
-    chat_member: Optional[Any] = None
-    chat_join_request: Optional[Any] = None
+    message: Message | None = None
+    edited_message: Message | None = None
+    channel_post: Message | None = None
+    edited_channel_post: Message | None = None
+    callback_query: CallbackQuery | None = None
+    inline_query: Any | None = None
+    chosen_inline_result: Any | None = None
+    shipping_query: Any | None = None
+    pre_checkout_query: Any | None = None
+    poll: Any | None = None
+    poll_answer: Any | None = None
+    my_chat_member: Any | None = None
+    chat_member: Any | None = None
+    chat_join_request: Any | None = None
 
     @property
-    def effective_message(self) -> Optional[Message]:
+    def effective_message(self) -> Message | None:
         """
         Get the effective message from the update.
 
@@ -60,12 +60,14 @@ class Update(TelegramObject):
             The first non-None message from the update
         """
         return (
-            self.message or self.edited_message or
-            self.channel_post or self.edited_channel_post
+            self.message
+            or self.edited_message
+            or self.channel_post
+            or self.edited_channel_post
         )
 
     @property
-    def effective_chat(self) -> Optional['Chat']:
+    def effective_chat(self) -> Optional["Chat"]:
         """
         Get the effective chat from the update.
 
@@ -79,7 +81,7 @@ class Update(TelegramObject):
         return None
 
     @property
-    def effective_user(self) -> Optional['User']:
+    def effective_user(self) -> Optional["User"]:
         """
         Get the effective user from the update.
 

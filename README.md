@@ -1,19 +1,14 @@
 # Gpgram
 
-A modern, asynchronous Telegram Bot API library with advanced handler capabilities, inspired by python-telegram-bot and aiogram.
+A clean and simple Telegram Bot API library for Python.
 
 ## Features
 
-- 🚀 **Fully asynchronous** using Python's `asyncio`
-- 🧩 **Clean, intuitive API design** for easy bot development
-- 🔄 **Advanced routing system** for handling updates
-- 🔍 **Flexible filter system** for message handling
-- 🔌 **Middleware support** for pre and post-processing updates
-- 🛠️ **Utility functions** for common tasks
-- 📝 **Type hints** for better IDE support
-- 🧪 **Pydantic integration** for data validation
-- 🔒 **Error handling** with custom exceptions
-- 🌟 **Simplified syntax** for common tasks
+- 🚀 **Simple API** - Clean, event-driven design with decorator-based handlers
+- ⚡ **Fast** - Built with async/await and httpx for high performance
+- 🛡️ **Type Safe** - Full type hints with Pydantic models
+- 🧪 **Well Tested** - Comprehensive test suite with pytest
+- 📦 **Modern** - Uses modern Python practices and tools
 
 ## Installation
 
@@ -23,218 +18,160 @@ pip install gpgram
 
 ## Quick Start
 
-Here's a simple echo bot example:
-
 ```python
-import asyncio
-import logging
-import os
+from gpgram import Bot
 
-from gpgram import Bot, Dispatcher, Router, CommandFilter
+bot = Bot("YOUR_BOT_TOKEN")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+@bot.command(r"hello|hi")
+async def greet(event):
+    await event.send_message("Hello there!")
 
-# Create a router for message handlers
-router = Router()
+@bot.on_message(r"ping")
+async def ping(event):
+    await event.reply("Pong!")
 
-@router.message(CommandFilter('start'))
-async def start_command(message, bot):
-    """Handle the /start command."""
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text=f"Hello, {message.from_user.full_name}! I'm a simple bot."
-    )
+@bot.on_callback(r"data")
+async def handle_callback(event):
+    await event.answer_callback("Callback received!")
 
-@router.message()
-async def echo_message(message, bot):
-    """Echo all messages."""
-    if message.text:
-        await bot.send_message(
-            chat_id=message.chat.id,
-            text=f"You said: {message.text}"
-        )
-
-async def main():
-    # Create a bot instance
-    bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-
-    # Create a dispatcher
-    dp = Dispatcher(bot=bot)
-
-    # Register the router
-    dp.register_router(router)
-
-    # Start polling
-    await dp.run_polling()
-
-if __name__ == '__main__':
-    asyncio.run(main())
+bot.run()
 ```
 
-## Advanced Usage
+## API Reference
 
-### Using Filters
+### Bot Class
 
+#### Constructor
 ```python
-from gpgram import TextFilter, RegexFilter, ChatTypeFilter
-
-# Text filter
-@router.message(TextFilter("hello", ignore_case=True))
-async def hello_message(message, bot):
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text="Hello to you too!"
-    )
-
-# Regex filter
-@router.message(RegexFilter(r"^[0-9]+$"))
-async def number_message(message, bot):
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text="That's a number!"
-    )
-
-# Chat type filter
-@router.message(ChatTypeFilter("private"))
-async def private_message(message, bot):
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text="This is a private chat"
-    )
+Bot(token: str, timeout: float = 30.0, api_url: Optional[str] = None)
 ```
 
-### Using Inline Keyboards
+#### Decorators
 
-```python
-from gpgram import InlineKeyboardBuilder
+- `@bot.command(pattern)` - Handle commands with regex pattern matching
+- `@bot.on_message(pattern)` - Handle messages with regex pattern matching
+- `@bot.on_callback(pattern)` - Handle callback queries with regex pattern matching
 
-@router.message(CommandFilter('menu'))
-async def menu_command(message, bot):
-    # Create an inline keyboard
-    keyboard = InlineKeyboardBuilder()
-    keyboard.add("Option 1", callback_data="option_1")
-    keyboard.add("Option 2", callback_data="option_2")
-    keyboard.row()
-    keyboard.add("Option 3", callback_data="option_3")
+#### Methods
 
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text="Please select an option:",
-        reply_markup=keyboard.build()
-    )
+- `bot.send_message(chat_id, text, **kwargs)` - Send a text message
+- `bot.edit_message_text(text, chat_id, message_id, **kwargs)` - Edit a message
+- `bot.delete_message(chat_id, message_id)` - Delete a message
+- `bot.answer_callback_query(callback_query_id, text, **kwargs)` - Answer callback query
+- `bot.polling(**kwargs)` - Start polling for updates
+- `bot.run()` - Run the bot (blocking)
 
-@router.callback_query()
-async def handle_callback_query(callback_query, bot):
-    # Answer the callback query
-    await bot.answer_callback_query(
-        callback_query_id=callback_query.id,
-        text=f"You clicked: {callback_query.data}"
-    )
+### Event Class
 
-    # Send a response based on the callback data
-    await bot.send_message(
-        chat_id=callback_query.message.chat.id,
-        text=f"You selected: {callback_query.data}"
-    )
-```
+#### Properties
 
-### Using Middleware
+- `event.message` - Message object (if available)
+- `event.callback_query` - Callback query object (if available)
+- `event.text` - Message text
+- `event.callback_data` - Callback data
+- `event.chat_id` - Chat ID
+- `event.user_id` - User ID
 
-```python
-from gpgram import BaseMiddleware
+#### Methods
 
-class LoggingMiddleware(BaseMiddleware):
-    """Middleware for logging updates."""
-
-    async def on_pre_process_update(self, update, data):
-        """Log updates before processing."""
-        print(f"Received update: {update.update_id}")
-
-    async def on_post_process_update(self, update, data, handler_result):
-        """Log updates after processing."""
-        print(f"Processed update: {update.update_id}")
-
-# Register the middleware
-dp.register_middleware(LoggingMiddleware())
-```
-
-### Error Handling
-
-```python
-# Error handler
-async def error_handler(exception, update):
-    """Handle errors."""
-    print(f"Error processing update {update.update_id}: {exception}")
-
-# Register the error handler
-dp.register_error_handler(error_handler)
-```
-
-## Simplified Syntax
-
-Gpgram also provides a simplified syntax for common tasks:
-
-```python
-import os
-import asyncio
-from gpgram import SimpleBot, Handler, Button, InlineButton
-
-async def main():
-    # Create a bot instance with the simplified interface
-    bot = SimpleBot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-
-    # Create a handler
-    handler = Handler(bot=bot)
-
-    # Register command handlers
-    @handler.command("start")
-    async def start_command(message, bot):
-        await message.reply(
-            bot=bot,
-            text="Hello! I'm a bot created with Gpgram's simplified syntax."
-        )
-
-    # Register message handlers
-    @handler.message(contains="hello")
-    async def hello_handler(message, bot):
-        await message.reply(
-            bot=bot,
-            text=f"Hello, {message.from_user_first_name}!"
-        )
-
-    # Create inline buttons
-    button1 = InlineButton(text="Option 1", callback_data="option1")
-    button2 = InlineButton(text="Option 2", callback_data="option2")
-
-    # Create a keyboard with the buttons
-    keyboard = Button.row(button1, button2)
-
-    # Start polling
-    await handler.start_polling()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+- `event.send_message(text, **kwargs)` - Send message to event chat
+- `event.reply(text, **kwargs)` - Reply to the event
+- `event.edit_message(text, **kwargs)` - Edit the message
+- `event.delete_message()` - Delete the message
+- `event.answer_callback(text, **kwargs)` - Answer callback query
 
 ## Examples
 
-Check out the examples directory for more detailed examples:
+### Command Handling
 
-- `simple_bot.py` - A simple bot with basic commands
-- `advanced_bot.py` - An advanced bot with inline keyboards, middleware, and error handling
-- `echo_bot.py` - A basic echo bot
-- `inline_keyboard_bot.py` - A bot demonstrating inline keyboards
-- `simple_syntax_bot.py` - A bot using the simplified syntax
+```python
+@bot.command(r"start")
+async def start(event):
+    await event.send_message("Welcome! Use /help for commands.")
 
-## Documentation
+@bot.command(r"echo (.+)")
+async def echo(event):
+    # Extract captured group from regex
+    message = event.text  # This would be "echo hello world"
+    await event.reply(f"You said: {message}")
+```
 
-For more detailed documentation, see the docstrings in the code or visit our [documentation website](https://gpgram.readthedocs.io/).
+### Message Handling
 
-## Contributing
+```python
+@bot.on_message(r"hello")
+async def hello(event):
+    await event.reply("Hi there!")
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+@bot.on_message(r"buy (.+)")
+async def buy(event):
+    item = event.text.split(" ", 1)[1]
+    await event.send_message(f"You want to buy: {item}")
+```
+
+### Callback Queries
+
+```python
+@bot.on_callback(r"page_(\d+)")
+async def pagination(event):
+    page = int(event.callback_data.split("_")[1])
+    await event.edit_message(f"Page {page}")
+    await event.answer_callback()
+```
+
+### Inline Keyboards
+
+```python
+from gpgram import Bot
+
+bot = Bot("token")
+
+@bot.command(r"menu")
+async def show_menu(event):
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "Button 1", "callback_data": "btn1"},
+                {"text": "Button 2", "callback_data": "btn2"}
+            ]
+        ]
+    }
+
+    await event.send_message("Choose an option:", reply_markup=keyboard)
+
+@bot.on_callback(r"btn1|btn2")
+async def handle_buttons(event):
+    await event.edit_message(f"You clicked: {event.callback_data}")
+    await event.answer_callback("Button clicked!")
+
+bot.run()
+```
+
+## Development
+
+### Setup
+
+```bash
+git clone https://github.com/GrandpaEJ/gpgram.git
+cd gpgram
+uv sync --dev
+```
+
+### Testing
+
+```bash
+uv run pytest
+```
+
+### Code Quality
+
+```bash
+uv run black gpgram/ tests/
+uv run ruff check gpgram/ tests/
+uv run flake8 gpgram/ tests/
+```
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.

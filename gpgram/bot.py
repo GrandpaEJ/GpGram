@@ -1,72 +1,61 @@
 """
-Bot class for interacting with the Telegram Bot API.
+Gpgram - A modern, clean Telegram Bot API library.
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional, Union, TypeVar, Type, BinaryIO, Callable, Awaitable
+import re
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import httpx
-from pydantic import BaseModel
 
-from .types.update import Update
+from .types.callback_query import CallbackQuery
 from .types.message import Message
-from .logging import get_logger
+from .types.update import Update
 
-T = TypeVar('T')
-
-class BotException(Exception):
-    """Base exception for Bot errors."""
-    pass
-
-class APIError(BotException):
-    """Exception raised when the Telegram API returns an error."""
-
-    def __init__(self, error_code: int, description: str):
-        self.error_code = error_code
-        self.description = description
-        super().__init__(f"Telegram API error {error_code}: {description}")
 
 class Bot:
     """
-    Main class for interacting with the Telegram Bot API.
+    A clean and simple Telegram Bot API client.
 
-    This class provides methods for sending requests to the Telegram Bot API
-    and handles the authentication with the bot token.
+    This class provides a straightforward interface for building Telegram bots
+    with event-driven programming and decorator-based handlers.
     """
-
-    API_URL = "https://api.telegram.org/bot{token}/{method}"
-    FILE_URL = "https://api.telegram.org/file/bot{token}/{file_path}"
 
     def __init__(
         self,
         token: str,
-        parse_mode: Optional[str] = None,
-        base_url: Optional[str] = None,
         timeout: float = 30.0,
-        connection_pool_size: int = 100,
+        api_url: str | None = None,
     ):
         """
-        Initialize the Bot instance.
+        Initialize the bot.
 
         Args:
-            token: Telegram Bot API token
-            parse_mode: Default parse mode for sending messages
-            base_url: Custom base URL for Telegram API
-            timeout: Timeout for API requests in seconds
-            connection_pool_size: Size of the connection pool
+            token: Telegram bot token
+            timeout: Request timeout in seconds
+            api_url: Custom API URL (optional)
         """
         self.token = token
-        self.parse_mode = parse_mode
-        self.base_url = base_url or self.API_URL
-        self.file_url = self.FILE_URL
         self.timeout = timeout
-        self.logger = get_logger(__name__)
+        self.api_url = api_url or f"https://api.telegram.org/bot{token}"
 
-        # Create HTTP client with connection pooling
+        # HTTP client with connection pooling
         self._client = httpx.AsyncClient(
             timeout=timeout,
-            limits=httpx.Limits(max_connections=connection_pool_size)
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=100),
         )
+
+        # Event handlers
+        self._handlers: list[Callable] = []
+        self._command_handlers: dict[str, list[Callable]] = {}
+        self._message_handlers: list[Callable] = []
+        self._callback_handlers: list[Callable] = []
+
+        # Running state
+        self._running = False
+        self._polling_task: asyncio.Task | None = None
+        self._offset: int | None = None
 
     async def __aenter__(self):
         return self
@@ -75,464 +64,481 @@ class Bot:
         await self.close()
 
     async def close(self):
-        """Close the bot's HTTP client session."""
+        """Close the bot and cleanup resources."""
+        self._running = False
+        if self._polling_task:
+            self._polling_task.cancel()
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
         await self._client.aclose()
 
-    async def _make_request(
-        self,
-        method: str,
-        params: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
+    async def _make_request(self, method: str, **params) -> dict[str, Any]:
         """
-        Make a request to the Telegram Bot API.
+        Make a request to the Telegram API.
 
         Args:
             method: API method name
-            params: Parameters for the API method
-            files: Files to upload
-            **kwargs: Additional parameters to pass to the API method
+            **params: Method parameters
 
         Returns:
-            Response from the API as a dictionary
-
-        Raises:
-            APIError: If the API returns an error
-            httpx.HTTPError: If there's an HTTP error
+            API response data
         """
-        url = self.base_url.format(token=self.token, method=method)
-
-        if params is None:
-            params = {}
-
-        # Add default parse_mode if not explicitly set
-        if self.parse_mode and 'parse_mode' not in params and method in {
-            'sendMessage', 'editMessageText', 'sendPhoto', 'sendVideo',
-            'sendAudio', 'sendDocument', 'sendAnimation'
-        }:
-            params['parse_mode'] = self.parse_mode
-
-        # Add additional kwargs to params
-        params.update(kwargs)
+        url = f"{self.api_url}/{method}"
 
         # Remove None values
         params = {k: v for k, v in params.items() if v is not None}
 
-        try:
-            if files:
-                response = await self._client.post(url, data=params, files=files)
-            else:
+        for attempt in range(3):
+            try:
                 response = await self._client.post(url, json=params)
+                response.raise_for_status()
+                data = response.json()
 
-            response.raise_for_status()
-            result = response.json()
+                if not data.get("ok"):
+                    raise Exception(
+                        f"API Error: {data.get('description', 'Unknown error')}"
+                    )
 
-            if not result.get('ok'):
-                error_code = result.get('error_code', 0)
-                description = result.get('description', 'No description')
-                self.logger.error(f"API error {error_code}: {description}")
-                raise APIError(error_code, description)
+                return data["result"]
 
-            return result['result']
+            except Exception:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.5 * (2**attempt))
 
-        except httpx.HTTPError as e:
-            self.logger.error(f"HTTP error: {e}")
-            raise
-
-    async def get_me(self) -> Dict[str, Any]:
+    def command(self, pattern: str | None = None):
         """
-        Get information about the bot.
-
-        Returns:
-            A User object representing the bot.
-        """
-        return await self._make_request("getMe")
-
-    async def get_updates(
-        self,
-        offset: Optional[int] = None,
-        limit: Optional[int] = None,
-        timeout: Optional[int] = None,
-        allowed_updates: Optional[List[str]] = None,
-    ) -> List[Update]:
-        """
-        Get updates from Telegram.
+        Decorator to register a command handler.
 
         Args:
-            offset: Identifier of the first update to be returned
-            limit: Limit the number of updates to be retrieved
-            timeout: Timeout in seconds for long polling
-            allowed_updates: List of update types to receive
+            pattern: Regex pattern for command matching. If None, matches all commands.
 
         Returns:
-            List of Update objects
+            Decorator function
         """
-        params = {
-            'offset': offset,
-            'limit': limit,
-            'timeout': timeout,
-            'allowed_updates': allowed_updates,
-        }
 
-        result = await self._make_request("getUpdates", params)
-        return [Update.from_dict(update) for update in result]
+        def decorator(func: Callable[["Event"], Awaitable[None]]) -> Callable:
+            if pattern is None:
+                # Match all commands
+                self._handlers.append(func)
+            else:
+                # Compile regex pattern
+                compiled_pattern = re.compile(pattern, re.IGNORECASE)
+                self._command_handlers[pattern] = self._command_handlers.get(
+                    pattern, []
+                ) + [func]
+                # Store pattern for later use
+                func._pattern = compiled_pattern
+            return func
 
-    async def set_webhook(
-        self,
-        url: str,
-        certificate: Optional[BinaryIO] = None,
-        ip_address: Optional[str] = None,
-        max_connections: Optional[int] = None,
-        allowed_updates: Optional[List[str]] = None,
-        drop_pending_updates: Optional[bool] = None,
-        secret_token: Optional[str] = None,
-    ) -> bool:
+        return decorator
+
+    def on_message(self, pattern: str | None = None):
         """
-        Set webhook for getting updates.
+        Decorator to register a message handler.
 
         Args:
-            url: HTTPS URL to send updates to
-            certificate: Upload your public key certificate
-            ip_address: The fixed IP address which will be used to send webhook requests
-            max_connections: Maximum allowed number of simultaneous HTTPS connections to the webhook
-            allowed_updates: List of the update types you want your bot to receive
-            drop_pending_updates: Pass True to drop all pending updates
-            secret_token: A secret token to be sent in a header "X-Telegram-Bot-Api-Secret-Token"
+            pattern: Regex pattern for message matching. If None, matches all messages.
 
         Returns:
-            True on success
+            Decorator function
         """
-        params = {
-            'url': url,
-            'ip_address': ip_address,
-            'max_connections': max_connections,
-            'allowed_updates': allowed_updates,
-            'drop_pending_updates': drop_pending_updates,
-            'secret_token': secret_token,
-        }
 
-        files = None
-        if certificate:
-            files = {'certificate': certificate}
+        def decorator(func: Callable[["Event"], Awaitable[None]]) -> Callable:
+            if pattern is None:
+                self._message_handlers.append(func)
+            else:
+                compiled_pattern = re.compile(pattern, re.IGNORECASE)
+                func._pattern = compiled_pattern
+                self._message_handlers.append(func)
+            return func
 
-        result = await self._make_request("setWebhook", params, files)
-        return result
+        return decorator
 
-    async def delete_webhook(
-        self,
-        drop_pending_updates: Optional[bool] = None,
-    ) -> bool:
+    def on_callback(self, pattern: str | None = None):
         """
-        Remove webhook integration.
+        Decorator to register a callback query handler.
 
         Args:
-            drop_pending_updates: Pass True to drop all pending updates
+            pattern: Regex pattern for callback data matching. If None, matches all callbacks.
 
         Returns:
-            True on success
+            Decorator function
         """
-        params = {
-            'drop_pending_updates': drop_pending_updates,
-        }
 
-        result = await self._make_request("deleteWebhook", params)
-        return result
+        def decorator(func: Callable[["Event"], Awaitable[None]]) -> Callable:
+            if pattern is None:
+                self._callback_handlers.append(func)
+            else:
+                compiled_pattern = re.compile(pattern, re.IGNORECASE)
+                func._pattern = compiled_pattern
+                self._callback_handlers.append(func)
+            return func
 
-    async def get_webhook_info(self) -> Dict[str, Any]:
+        return decorator
+
+    async def _process_update(self, update_data: dict[str, Any]) -> None:
         """
-        Get current webhook status.
+        Process a single update.
 
-        Returns:
-            WebhookInfo object
+        Args:
+            update_data: Update data from Telegram
         """
-        return await self._make_request("getWebhookInfo")
+        update = Update.from_dict(update_data)
+        event = Event(update, self)
+
+        # Handle messages
+        if update.message:
+            await self._handle_message(event)
+
+        # Handle callback queries
+        elif update.callback_query:
+            await self._handle_callback(event)
+
+    async def _handle_message(self, event: "Event") -> None:
+        """
+        Handle message events.
+
+        Args:
+            event: Event object
+        """
+        text = event.text or ""
+
+        # Check command handlers first
+        if text.startswith("/"):
+            # Check specific command patterns
+            for _pattern, handlers in self._command_handlers.items():
+                if hasattr(handlers[0], "_pattern") and handlers[0]._pattern.search(
+                    text
+                ):
+                    for handler in handlers:
+                        await handler(event)
+                    return
+
+            # Check general command handlers
+            for handler in self._handlers:
+                await handler(event)
+            return
+
+        # Handle regular messages
+        for handler in self._message_handlers:
+            if not hasattr(handler, "_pattern") or handler._pattern.search(text):
+                await handler(event)
+
+    async def _handle_callback(self, event: "Event") -> None:
+        """
+        Handle callback query events.
+
+        Args:
+            event: Event object
+        """
+        data = event.callback_data or ""
+
+        for handler in self._callback_handlers:
+            if not hasattr(handler, "_pattern") or handler._pattern.search(data):
+                await handler(event)
 
     async def send_message(
         self,
-        chat_id: Union[int, str],
+        chat_id: int | str,
         text: str,
-        parse_mode: Optional[str] = None,
-        entities: Optional[List[Dict[str, Any]]] = None,
-        disable_web_page_preview: Optional[bool] = None,
-        disable_notification: Optional[bool] = None,
-        protect_content: Optional[bool] = None,
-        reply_to_message_id: Optional[int] = None,
-        allow_sending_without_reply: Optional[bool] = None,
-        reply_markup: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        parse_mode: str | None = None,
+        reply_markup: dict[str, Any] | None = None,
+        **kwargs,
+    ) -> Message:
         """
-        Send a message.
+        Send a text message.
 
         Args:
-            chat_id: Unique identifier for the target chat
-            text: Text of the message to be sent
-            parse_mode: Mode for parsing entities in the message text
-            entities: List of special entities in the message text
-            disable_web_page_preview: Disables link previews for links in this message
-            disable_notification: Sends the message silently
-            protect_content: Protects the content of the sent message from forwarding and saving
-            reply_to_message_id: If the message is a reply, ID of the original message
-            allow_sending_without_reply: Pass True if the message should be sent even if the specified replied-to message is not found
-            reply_markup: Additional interface options
+            chat_id: Chat ID to send to
+            text: Message text
+            parse_mode: Parse mode (Markdown, HTML, etc.)
+            reply_markup: Reply markup
+            **kwargs: Additional parameters
 
         Returns:
-            The sent Message
+            Sent message
         """
-        params = {
-            'chat_id': chat_id,
-            'text': text,
-            'parse_mode': parse_mode,
-            'entities': entities,
-            'disable_web_page_preview': disable_web_page_preview,
-            'disable_notification': disable_notification,
-            'protect_content': protect_content,
-            'reply_to_message_id': reply_to_message_id,
-            'allow_sending_without_reply': allow_sending_without_reply,
-            'reply_markup': reply_markup,
-        }
+        result = await self._make_request(
+            "sendMessage",
+            chat_id=chat_id,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            **kwargs,
+        )
+        return Message.from_dict(result)
 
-        return await self._make_request("sendMessage", params)
-
-    async def forward_message(
+    async def edit_message_text(
         self,
-        chat_id: Union[int, str],
-        from_chat_id: Union[int, str],
-        message_id: int,
-        disable_notification: Optional[bool] = None,
-        protect_content: Optional[bool] = None,
-    ) -> Dict[str, Any]:
+        text: str,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+        inline_message_id: str | None = None,
+        parse_mode: str | None = None,
+        reply_markup: dict[str, Any] | None = None,
+        **kwargs,
+    ) -> Message | bool:
         """
-        Forward a message.
+        Edit a message text.
 
         Args:
-            chat_id: Unique identifier for the target chat
-            from_chat_id: Unique identifier for the chat where the original message was sent
-            message_id: Message identifier in the chat specified in from_chat_id
-            disable_notification: Sends the message silently
-            protect_content: Protects the content of the forwarded message from forwarding and saving
+            text: New text
+            chat_id: Chat ID
+            message_id: Message ID to edit
+            inline_message_id: Inline message ID
+            parse_mode: Parse mode
+            reply_markup: Reply markup
+            **kwargs: Additional parameters
 
         Returns:
-            The forwarded Message
+            Edited message or True for inline messages
         """
-        params = {
-            'chat_id': chat_id,
-            'from_chat_id': from_chat_id,
-            'message_id': message_id,
-            'disable_notification': disable_notification,
-            'protect_content': protect_content,
-        }
+        result = await self._make_request(
+            "editMessageText",
+            text=text,
+            chat_id=chat_id,
+            message_id=message_id,
+            inline_message_id=inline_message_id,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            **kwargs,
+        )
 
-        return await self._make_request("forwardMessage", params)
+        if isinstance(result, bool):
+            return result
+        return Message.from_dict(result)
 
-    async def send_photo(
-        self,
-        chat_id: Union[int, str],
-        photo: Union[str, BinaryIO],
-        caption: Optional[str] = None,
-        parse_mode: Optional[str] = None,
-        caption_entities: Optional[List[Dict[str, Any]]] = None,
-        disable_notification: Optional[bool] = None,
-        protect_content: Optional[bool] = None,
-        reply_to_message_id: Optional[int] = None,
-        allow_sending_without_reply: Optional[bool] = None,
-        reply_markup: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+    async def delete_message(self, chat_id: int | str, message_id: int) -> bool:
         """
-        Send a photo.
+        Delete a message.
 
         Args:
-            chat_id: Unique identifier for the target chat
-            photo: Photo to send
-            caption: Photo caption
-            parse_mode: Mode for parsing entities in the photo caption
-            caption_entities: List of special entities in the caption
-            disable_notification: Sends the message silently
-            protect_content: Protects the content of the sent message from forwarding and saving
-            reply_to_message_id: If the message is a reply, ID of the original message
-            allow_sending_without_reply: Pass True if the message should be sent even if the specified replied-to message is not found
-            reply_markup: Additional interface options
+            chat_id: Chat ID
+            message_id: Message ID to delete
 
         Returns:
-            The sent Message
+            True on success
         """
-        params = {
-            'chat_id': chat_id,
-            'caption': caption,
-            'parse_mode': parse_mode,
-            'caption_entities': caption_entities,
-            'disable_notification': disable_notification,
-            'protect_content': protect_content,
-            'reply_to_message_id': reply_to_message_id,
-            'allow_sending_without_reply': allow_sending_without_reply,
-            'reply_markup': reply_markup,
-        }
-
-        files = None
-        if isinstance(photo, str) and (photo.startswith('http') or photo.startswith('file://')):
-            params['photo'] = photo
-        else:
-            files = {'photo': photo}
-
-        return await self._make_request("sendPhoto", params, files)
-
-    async def send_document(
-        self,
-        chat_id: Union[int, str],
-        document: Union[str, BinaryIO],
-        thumb: Optional[Union[str, BinaryIO]] = None,
-        caption: Optional[str] = None,
-        parse_mode: Optional[str] = None,
-        caption_entities: Optional[List[Dict[str, Any]]] = None,
-        disable_content_type_detection: Optional[bool] = None,
-        disable_notification: Optional[bool] = None,
-        protect_content: Optional[bool] = None,
-        reply_to_message_id: Optional[int] = None,
-        allow_sending_without_reply: Optional[bool] = None,
-        reply_markup: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Send a document.
-
-        Args:
-            chat_id: Unique identifier for the target chat
-            document: Document to send
-            thumb: Thumbnail of the file
-            caption: Document caption
-            parse_mode: Mode for parsing entities in the document caption
-            caption_entities: List of special entities in the caption
-            disable_content_type_detection: Disables automatic content type detection for files
-            disable_notification: Sends the message silently
-            protect_content: Protects the content of the sent message from forwarding and saving
-            reply_to_message_id: If the message is a reply, ID of the original message
-            allow_sending_without_reply: Pass True if the message should be sent even if the specified replied-to message is not found
-            reply_markup: Additional interface options
-
-        Returns:
-            The sent Message
-        """
-        params = {
-            'chat_id': chat_id,
-            'caption': caption,
-            'parse_mode': parse_mode,
-            'caption_entities': caption_entities,
-            'disable_content_type_detection': disable_content_type_detection,
-            'disable_notification': disable_notification,
-            'protect_content': protect_content,
-            'reply_to_message_id': reply_to_message_id,
-            'allow_sending_without_reply': allow_sending_without_reply,
-            'reply_markup': reply_markup,
-        }
-
-        files = {}
-
-        if isinstance(document, str) and (document.startswith('http') or document.startswith('file://')):
-            params['document'] = document
-        else:
-            files['document'] = document
-
-        if thumb:
-            if isinstance(thumb, str) and (thumb.startswith('http') or thumb.startswith('file://')):
-                params['thumb'] = thumb
-            else:
-                files['thumb'] = thumb
-
-        if not files:
-            files = None
-
-        return await self._make_request("sendDocument", params, files)
+        await self._make_request(
+            "deleteMessage", chat_id=chat_id, message_id=message_id
+        )
+        return True
 
     async def answer_callback_query(
         self,
         callback_query_id: str,
-        text: Optional[str] = None,
-        show_alert: Optional[bool] = None,
-        url: Optional[str] = None,
-        cache_time: Optional[int] = None,
+        text: str | None = None,
+        show_alert: bool | None = None,
+        **kwargs,
     ) -> bool:
         """
         Answer a callback query.
 
         Args:
-            callback_query_id: Unique identifier for the query to be answered
-            text: Text of the notification
-            show_alert: If True, an alert will be shown by the client instead of a notification
-            url: URL that will be opened by the user's client
-            cache_time: The maximum amount of time in seconds that the result of the callback query may be cached client-side
+            callback_query_id: Callback query ID
+            text: Notification text
+            show_alert: Whether to show alert
+            **kwargs: Additional parameters
 
         Returns:
             True on success
         """
-        params = {
-            'callback_query_id': callback_query_id,
-            'text': text,
-            'show_alert': show_alert,
-            'url': url,
-            'cache_time': cache_time,
-        }
+        await self._make_request(
+            "answerCallbackQuery",
+            callback_query_id=callback_query_id,
+            text=text,
+            show_alert=show_alert,
+            **kwargs,
+        )
+        return True
 
-        return await self._make_request("answerCallbackQuery", params)
-
-    async def edit_message_text(
+    async def polling(
         self,
-        text: str,
-        chat_id: Optional[Union[int, str]] = None,
-        message_id: Optional[int] = None,
-        inline_message_id: Optional[str] = None,
-        parse_mode: Optional[str] = None,
-        entities: Optional[List[Dict[str, Any]]] = None,
-        disable_web_page_preview: Optional[bool] = None,
-        reply_markup: Optional[Dict[str, Any]] = None,
-    ) -> Union[Dict[str, Any], bool]:
+        interval: float = 0.5,
+        timeout: int = 30,
+        drop_pending_updates: bool = False,
+    ) -> None:
         """
-        Edit text and game messages.
+        Start polling for updates.
 
         Args:
-            text: New text of the message
-            chat_id: Required if inline_message_id is not specified
-            message_id: Required if inline_message_id is not specified
-            inline_message_id: Required if chat_id and message_id are not specified
-            parse_mode: Mode for parsing entities in the message text
-            entities: List of special entities in the message text
-            disable_web_page_preview: Disables link previews for links in this message
-            reply_markup: A JSON-serialized object for an inline keyboard
+            interval: Polling interval in seconds
+            timeout: Long polling timeout
+            drop_pending_updates: Whether to drop pending updates
+        """
+        if drop_pending_updates:
+            self._offset = -1
+            await self._make_request("getUpdates", offset=-1, limit=1, timeout=0)
+
+        self._running = True
+
+        while self._running:
+            try:
+                updates = await self._make_request(
+                    "getUpdates",
+                    offset=self._offset,
+                    timeout=timeout,
+                    allowed_updates=["message", "callback_query"],
+                )
+
+                for update_data in updates:
+                    await self._process_update(update_data)
+                    self._offset = update_data["update_id"] + 1
+
+            except Exception as e:
+                print(f"Polling error: {e}")
+                await asyncio.sleep(interval)
+
+    def run(self) -> None:
+        """
+        Run the bot (blocking).
+        """
+        asyncio.run(self.polling())
+
+
+class Event:
+    """
+    Event wrapper for Telegram updates.
+    """
+
+    def __init__(self, update: Update, bot: Bot):
+        """
+        Initialize an event.
+
+        Args:
+            update: Telegram update
+            bot: Bot instance
+        """
+        self.update = update
+        self.bot = bot
+
+    @property
+    def message(self) -> Message | None:
+        """Get the message from the event."""
+        return self.update.message
+
+    @property
+    def callback_query(self) -> CallbackQuery | None:
+        """Get the callback query from the event."""
+        return self.update.callback_query
+
+    @property
+    def text(self) -> str | None:
+        """Get the text from the event."""
+        if self.message:
+            return self.message.text
+        return None
+
+    @property
+    def callback_data(self) -> str | None:
+        """Get the callback data from the event."""
+        if self.callback_query:
+            return self.callback_query.data
+        return None
+
+    @property
+    def chat_id(self) -> int | None:
+        """Get the chat ID from the event."""
+        if self.message:
+            return self.message.chat.id
+        elif self.callback_query and self.callback_query.message:
+            return self.callback_query.message.chat.id
+        return None
+
+    @property
+    def user_id(self) -> int | None:
+        """Get the user ID from the event."""
+        if self.message and self.message.from_user:
+            return self.message.from_user.id
+        elif self.callback_query and self.callback_query.from_user:
+            return self.callback_query.from_user.id
+        return None
+
+    async def send_message(self, text: str, **kwargs) -> Message:
+        """
+        Send a message in response to this event.
+
+        Args:
+            text: Message text
+            **kwargs: Additional parameters
 
         Returns:
-            The edited Message or True if inline_message_id was specified
+            Sent message
         """
-        params = {
-            'text': text,
-            'chat_id': chat_id,
-            'message_id': message_id,
-            'inline_message_id': inline_message_id,
-            'parse_mode': parse_mode,
-            'entities': entities,
-            'disable_web_page_preview': disable_web_page_preview,
-            'reply_markup': reply_markup,
-        }
+        if not self.chat_id:
+            raise ValueError("No chat ID available for this event")
 
-        return await self._make_request("editMessageText", params)
+        return await self.bot.send_message(self.chat_id, text, **kwargs)
 
-    async def delete_message(
-        self,
-        chat_id: Union[int, str],
-        message_id: int,
-    ) -> bool:
+    async def reply(self, text: str, **kwargs) -> Message:
         """
-        Delete a message.
+        Reply to this event.
 
         Args:
-            chat_id: Unique identifier for the target chat
-            message_id: Identifier of the message to delete
+            text: Message text
+            **kwargs: Additional parameters
+
+        Returns:
+            Sent message
+        """
+        if not self.chat_id:
+            raise ValueError("No chat ID available for this event")
+
+        message_id = None
+        if self.message:
+            message_id = self.message.message_id
+
+        return await self.bot.send_message(
+            self.chat_id, text, reply_to_message_id=message_id, **kwargs
+        )
+
+    async def edit_message(self, text: str, **kwargs) -> Message | bool:
+        """
+        Edit the message in this event.
+
+        Args:
+            text: New text
+            **kwargs: Additional parameters
+
+        Returns:
+            Edited message
+        """
+        if not self.message:
+            raise ValueError("No message available to edit")
+
+        return await self.bot.edit_message_text(
+            text, chat_id=self.chat_id, message_id=self.message.message_id, **kwargs
+        )
+
+    async def delete_message(self) -> bool:
+        """
+        Delete the message in this event.
 
         Returns:
             True on success
         """
-        params = {
-            'chat_id': chat_id,
-            'message_id': message_id,
-        }
+        if not self.message:
+            raise ValueError("No message available to delete")
 
-        return await self._make_request("deleteMessage", params)
+        return await self.bot.delete_message(self.chat_id, self.message.message_id)
 
-    # Add more methods for other Telegram API endpoints as needed
+    async def answer_callback(self, text: str | None = None, **kwargs) -> bool:
+        """
+        Answer the callback query in this event.
+
+        Args:
+            text: Notification text
+            **kwargs: Additional parameters
+
+        Returns:
+            True on success
+        """
+        if not self.callback_query:
+            raise ValueError("No callback query available to answer")
+
+        return await self.bot.answer_callback_query(
+            self.callback_query.id, text=text, **kwargs
+        )

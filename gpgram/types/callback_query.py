@@ -2,12 +2,12 @@
 Callback Query type for Telegram API.
 """
 
-from typing import Optional, Dict, Any
 from pydantic import Field
 
 from .base import TelegramObject
-from .user import User
 from .message import Message
+from .user import User
+
 
 class CallbackQuery(TelegramObject):
     """
@@ -24,14 +24,11 @@ class CallbackQuery(TelegramObject):
     """
 
     id: str
-    from_user: User = Field(alias='from')
+    from_user: User = Field(alias="from")
     chat_instance: str
-    message: Optional[Message] = None
-    inline_message_id: Optional[str] = None
-    data: Optional[str] = None
-    game_short_name: Optional[str] = None
+    message: Message | None = None
+    inline_message_id: str | None = None
+    data: str | None = None
+    game_short_name: str | None = None
 
-    model_config = {
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}

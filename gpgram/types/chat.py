@@ -2,15 +2,18 @@
 Chat type for Telegram API.
 """
 
-from typing import Optional, List, Dict, Any
-from pydantic import Field
+from typing import TYPE_CHECKING, Any, Optional
 
 from .base import TelegramObject
+
+if TYPE_CHECKING:
+    from .message import Message
+
 
 class Chat(TelegramObject):
     """
     This object represents a chat.
-    
+
     Attributes:
         id: Unique identifier for this chat
         type: Type of chat, can be either "private", "group", "supergroup" or "channel"
@@ -32,57 +35,57 @@ class Chat(TelegramObject):
         linked_chat_id: Unique identifier for the linked chat
         location: For supergroups, the location to which the supergroup is connected
     """
-    
+
     id: int
     type: str
-    title: Optional[str] = None
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    photo: Optional[Dict[str, Any]] = None
-    bio: Optional[str] = None
-    description: Optional[str] = None
-    invite_link: Optional[str] = None
-    pinned_message: Optional['Message'] = None
-    permissions: Optional[Dict[str, Any]] = None
-    slow_mode_delay: Optional[int] = None
-    message_auto_delete_time: Optional[int] = None
-    has_protected_content: Optional[bool] = None
-    sticker_set_name: Optional[str] = None
-    can_set_sticker_set: Optional[bool] = None
-    linked_chat_id: Optional[int] = None
-    location: Optional[Dict[str, Any]] = None
-    
+    title: str | None = None
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    photo: dict[str, Any] | None = None
+    bio: str | None = None
+    description: str | None = None
+    invite_link: str | None = None
+    pinned_message: Optional["Message"] = None  # type: ignore
+    permissions: dict[str, Any] | None = None
+    slow_mode_delay: int | None = None
+    message_auto_delete_time: int | None = None
+    has_protected_content: bool | None = None
+    sticker_set_name: str | None = None
+    can_set_sticker_set: bool | None = None
+    linked_chat_id: int | None = None
+    location: dict[str, Any] | None = None
+
     @property
     def full_name(self) -> str:
         """
         Get the chat's full name.
-        
+
         Returns:
             The chat's full name (title for groups, first name + last name for private chats)
         """
-        if self.type == 'private':
+        if self.type == "private":
             if self.last_name:
                 return f"{self.first_name} {self.last_name}"
             return self.first_name or ""
         return self.title or ""
-    
+
     @property
     def is_private(self) -> bool:
         """Check if the chat is a private chat."""
-        return self.type == 'private'
-    
+        return self.type == "private"
+
     @property
     def is_group(self) -> bool:
         """Check if the chat is a group chat."""
-        return self.type == 'group'
-    
+        return self.type == "group"
+
     @property
     def is_supergroup(self) -> bool:
         """Check if the chat is a supergroup."""
-        return self.type == 'supergroup'
-    
+        return self.type == "supergroup"
+
     @property
     def is_channel(self) -> bool:
         """Check if the chat is a channel."""
-        return self.type == 'channel'
+        return self.type == "channel"
